@@ -9,8 +9,9 @@
 //	/smart_lighter run
 //	/smart_lighter save
 //	/smart_lighter load
-//	/smart_lighter show
+//	/smart_lighter give
 //	/smart_lighter config
+//	/smart_lighter config show
 //	/smart_lighter config repeat
 //	/smart_lighter config repeat true
 //	/smart_lighter config repeat false
@@ -40,6 +41,13 @@
 //   /script in smart_lighter run bpos = __do_light_area(global_p1, global_p2); print(bpos); if (bpos != null, global_p2:1 = bpos:1);
 // Do not invoke this command while it's still running.
 
+// TODO:
+// * Run in a thread: use sleep() instead of schedule() for looping
+// * Constant execution via threads? Would need to partition scans
+// * Named configuration sets?
+
+global_item_type = 'torch';
+global_item_name = 'Auto Lighter';
 global_is_running = false;
 global_curr_y = null;
 
@@ -58,6 +66,7 @@ __config() -> {
     '' -> ['help'],
 		'help' -> ['help'],
 		'run' -> ['light_area'],
+		'give' -> ['give_lighter'],
 		'save' -> ['save_config'],
 		'load' -> ['load_config'],
     'config' -> ['config', null, null],
@@ -138,9 +147,7 @@ __format_line(string) -> (
 		cmd_s = replace_first(cmd_s, ' <[a-z]+>');
 	);
 	cmd = if (cmd_s, f_cmd(cmd_s), '');
-	for (args,
-		cmd += ' ' + f_arg(_);
-	);
+	for (args, cmd += ' ' + f_arg(_));
 	sep = format('g ->');
 	return(__prefix() + cmd + ' ' + sep + ' ' + f_desc(desc_s));
 );
@@ -148,8 +155,11 @@ __format_line(string) -> (
 __on_player_uses_item(pl, item, hand) -> (
 	if (hand != 'mainhand', return());
 	[itype, icount, inbt] = item;
-	if (itype == 'torch' && escape_nbt(inbt:'display':'Name') ~ '"Auto Lighter"', (
-		light_area();
+	if (itype == global_item_type && inbt != null, (
+		iname = parse_nbt(inbt:'display':'Name'):'text';
+		if (iname == global_item_name, (
+			light_area();
+		));
 	));
 );
 
@@ -162,7 +172,12 @@ __get_volume() -> (
 // Command handler for "/smart_lighter"
 help() -> (
 	print(__format_line(' - This menu'));
+	print(__format_line('run - Execute the script'));
+	print(__format_line('save - Save current configuration to disk'));
+	print(__format_line('load - Reload the most recently saved configuration'));
+	print(__format_line('give - Give the player the [Auto Lighter] item'));
 	print(__format_line('config - Display current configuration'));
+	print(__format_line('config show - Display current configuration compactly'));
 	print(__format_line('config repeat - Display current repeat status'));
 	print(__format_line('config repeat true - Enable automatic repeat'));
 	print(__format_line('config repeat false - Disable automatic repeat'));
@@ -302,5 +317,17 @@ light_area() -> (
 		global_curr_y = null;
 		__light_area();
 	));
+);
+
+// Command handler for "/smart_lighter give"
+give_lighter() -> (
+	name = str('{"text":%s}', escape_nbt(global_item_name));
+	item = str('%s{display:{Name:%s}}', global_item_type, escape_nbt(name));
+	print(item);
+	[rc, resp, err] = run('give @p ' + item);
+	if (err != null, (
+		print('ERROR: ' + err);
+	));
+	print(join(' ', resp));
 );
 
