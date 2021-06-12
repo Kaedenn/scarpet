@@ -35,8 +35,8 @@
 //	 /script unload smart_lighter
 
 // TODO:
-// * Run in a thread: use sleep() instead of schedule() for looping
-// * Provide named configuration sets
+// 1) Named configuration sets; /smart_lighter [save|load] <name>
+// 2) Threaded execution and use sleep() instead of schedule() for looping
 
 global_is_running = false;
 global_curr_y = null;
@@ -73,6 +73,8 @@ __config() -> {
 		'save' -> ['save_config'],
 		'load' -> ['load_config'],
 		'config' -> ['config', null, null],
+		'config save' -> ['save_config'],
+		'config load' -> ['load_config'],
 		'config show' -> ['config', 'show_raw', null],
 		'config repeat' -> ['config', 'repeat', null],
 		'config repeat true' -> ['config', 'repeat', true],
@@ -143,11 +145,21 @@ __load_config() -> (
 	return(false);
 );
 
+// Binary version of the format() builtin to simplify code analysis tools
 __format(f, s) -> format(f + ' ' + s);
+
+// Join a list of words in a way that preserves formatting
 __join(words) -> reduce(words, _a + if (_a != '', ' ', '') + _, '');
+
+// Variadic wrappers for convenience
 __vjoin(...words) -> __join(words);
+__vprint(...words) -> print(__join(words));
+__vtell(...words) -> __tell(__join(words));
+
+// *Very* crude plural formatting; returns text "<n> <s>"
 __plural(n, s) -> __format('lb', n) + ' ' + s + if (n == 1, '', 's');
 
+// Format text for the help() command
 __format_line(string) -> (
 	f_cmd(s) -> __format('lb', s);
 	f_arg(s) -> __format('bi', s);
@@ -164,8 +176,12 @@ __format_line(string) -> (
 	return(__prefix() + cmd + ' ' + sep + ' ' + f_desc(desc_s));
 );
 
+// Print a message to global_target
 __tell(msg) -> (
-	run(str('tellraw %s {"text":%s}', global_target, escape_nbt(msg)));
+	target = entity_selector(global_target):0;
+	if (target != null, (
+		print(target, msg);
+	));
 );
 
 __on_player_uses_item(pl, item, hand) -> (
@@ -190,10 +206,12 @@ help() -> (
 	print(format('eb ---------------- Smart Lighter ----------------'));
 	print(__format_line(' - This menu'));
 	print(__format_line('run - Execute the script'));
-	print(__format_line('save - Save current configuration to disk'));
-	print(__format_line('load - Reload the most recently saved configuration'));
+	print(__format_line('save - Save current configuration to disk (shorthand command)'));
+	print(__format_line('load - Reload the most recently saved configuration (shorthand command)'));
 	print(__format_line('give - Give the player the [Auto Lighter] item'));
 	print(__format_line('config - Display current configuration'));
+	print(__format_line('config save - Save current configuration to disk'));
+	print(__format_line('config load - Reload the most recently saved configuration'));
 	print(__format_line('config show - Display current configuration compactly'));
 	print(__format_line('config repeat - Display current repeat status'));
 	print(__format_line('config repeat true - Enable automatic repeat'));
@@ -225,7 +243,7 @@ config(option, value) -> (
 		config('delay', null);
 		config('min', null);
 		vol = __format('eb', __get_volume());
-		print(__vjoin(format('il Current volume:'), vol, format('il blocks')));
+		__vprint(format('il Current volume:'), vol, format('il blocks'));
 	),
 	option == 'show_raw', (
 		fmtopt(opt) -> __prefix() + format('eb config ' + opt) + ' ';
@@ -327,9 +345,10 @@ __do_light_area(p1, p2) -> (
 	__debug(str('__do_light_area([%d,%d,%d],[%d,%d,%d])', x1, y1, z1, x2, y2, z2));
 	b = block(global_block);
 	volume(p1, p2,
+		orig = block(_); // To make a copy
 		if (__should_have_torch(_, global_light_mode, global_min_level),
 			set(_, b);
-			return(_); // To avoid placing torches before the area is updated
+			return(orig); // To avoid placing torches before the area is updated
 		);
 	);
 	return(null);
@@ -373,15 +392,20 @@ __light_area_once() -> (
 // Light the configured area around the player. Repeats every global_delay
 // ticks if global_enable_repeat is true. Resets global_is_running once done.
 __light_area() -> (
-	b = __light_area_once();
-	if (b != null, (
-		__tell(str('Set the block %s at %s to %s', b, str(pos(b)), global_block));
-		global_curr_y = pos(b):1;
+	blk = __light_area_once();
+	if (blk != null, (
+		bpos = pos(blk);
+		newblk = block(bpos);
+		__vtell(
+			format('gi Set block'), str(blk),
+			format('gi at'), str(bpos),
+			format('gi to'), str(newblk));
+		global_curr_y = pos(blk):1;
 		if (global_enable_repeat, (
 			schedule(global_delay, '__light_area')
 		));
 	), (
-		__tell('No blocks found that needed to be lit');
+		__tell(format('gi No blocks found that needed to be lit'));
 		global_is_running = false;
 		global_curr_y = null;
 		global_max_y = null;
@@ -392,7 +416,7 @@ __light_area() -> (
 light_area() -> (
 	__debug('Invoked light_area()');
 	if (global_is_running, (
-		__tell('light_area() is still running, please wait a moment')
+		__tell('light_area() is still running; please wait a moment...')
 	), (
 		// Reset processing variables and start the lighting routine
 		global_is_running = true;
@@ -410,11 +434,11 @@ give_lighter() -> (
 	item = str('%s{display:{Name:%s}}', global_item_type, escape_nbt(name));
 	[rc, resp, err] = run(str('give %s %s', global_target, item));
 	if (!rc, (
-		print(__vjoin(
+		__vprint(
 			format('l /give'),
 			__format('t', global_target),
 			__format('e', item),
-			format('r failed:')));
+			format('r failed:'));
 		print(__format('rb', err));
 	), (
 		print(join(' ', resp));

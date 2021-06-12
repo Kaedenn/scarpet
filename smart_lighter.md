@@ -15,9 +15,7 @@ must satisfy _all_ of the following constraints:
 2. The block below must be solid
 3. The block below must not be `ice`
 
-## Sub-commands
-
-Invoke the following with `/smart_lighter <command...>`.
+## `/smart_lighter` sub-commands
 
 ### `run`: Invoke the script
 
@@ -29,14 +27,11 @@ placed.
 
 ### `save`: Save configuration to file
 
-This command will save the current configuration values to a file. This allows
-for a temporary configuration set that will be refreshed on reload or
-`/smart_lighter load`.
+This command is shorthand for `/smart_lighter config save`.
 
 ### `load`: Reload configuration from file
 
-This command will overwrite the current configuration values with the values
-saved via a previous `/smart_lighter save` command.
+This command is shorthand for `/smart_lighter config show`.
 
 ### `give`: Give the player the Auto Lighter item
 
@@ -45,6 +40,17 @@ Right-clicking with this item in the main-hand is equivalent to running
 `Auto Lighter`. Renaming a torch in an anvil will also work.
 
 ### `config`: Display current configuration values
+
+### `config save`: Save configuration to file
+
+This command will save the current configuration values to a file. This allows
+for temporary configuration that will be refreshed on reload or
+`/smart_lighter load`.
+
+### `config load`: Load configuration from file
+
+This command will load and overwrite the current configuration values with the
+values stored via a previous `/smart_lighter save` command.
 
 ### `config show`: Display current configuration in a condensed form
 
@@ -137,4 +143,17 @@ moment to recalculate lighting information before the next scan.
 prevents scanning an already-processed region.
 3. The scans terminate upon reaching the highest surface y-level. This prevents
 scanning an entire region of just air blocks.
+
+## Future Ideas
+
+### Named configuration sets
+
+I plan to provide the ability to have several distinct saved configurations
+managed via `/smart_lighter save <name>` and `/smart_lighter load <name>`.
+
+### Parallel (threaded) execution
+
+I plan to move the logic out of the main thread. This will greatly improve
+overall responsiveness and avoid framerate drops with a large processing
+radius.
 
